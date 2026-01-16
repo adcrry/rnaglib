@@ -5,3 +5,4 @@ from .point_cloud import *
 from .voxel import *
 from .sequence import SequenceRepresentation
 from .GVPgraph import GVPGraphRepresentation
+from .distograph import DistographRepresentation
