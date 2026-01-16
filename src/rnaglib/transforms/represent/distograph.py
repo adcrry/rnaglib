@@ -100,7 +100,10 @@ class DistographRepresentation(GraphRepresentation):
             batch = Batch.from_data_list(samples)
             # sometimes batching changes dtype from int to float32?
             batch.edge_index = batch.edge_index.to(torch.int64)
-            batch.edge_attr = batch.edge_attr.to(torch.float32)
+            if self.distogram_edge_features:
+                batch.edge_attr = batch.edge_attr.to(torch.float32)
+            else:
+                batch.edge_attr = batch.edge_attr.to(torch.int64)
             return batch
 
 
