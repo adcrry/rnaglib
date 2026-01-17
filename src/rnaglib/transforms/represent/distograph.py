@@ -76,7 +76,8 @@ class DistographRepresentation(GraphRepresentation):
                 
                 row, col = pyg_graph.edge_index
                 edge_distances = torch.from_numpy(distogram[row,col])
-                pyg_graph.edge_attr = torch.cat([pyg_graph.edge_attr.unsqueeze(1), edge_distances], dim=1)
+                pyg_graph.edge_attr = edge_distances
+                #pyg_graph.edge_attr = torch.cat([pyg_graph.edge_attr.unsqueeze(1), edge_distances], dim=1)
 
             return pyg_graph
         
