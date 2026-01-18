@@ -2,20 +2,22 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.nn import BatchNorm1d, Dropout
-from torch_geometric.nn import RGCNConv, GCNConv, NNConv, GATConv, TransformerConv, global_mean_pool
+from torch_geometric.nn import RGCNConv, GCNConv, NNConv, GATConv, RGATConv, TransformerConv, global_mean_pool
 
 from rnaglib.utils.misc import tonumpy
 
 
 class PygModel(torch.nn.Module):
     @classmethod
-    def from_task(cls,
-                  task,
-                  num_node_features=None,
-                  num_classes=None,
-                  graph_level=None,
-                  multi_label=None,
-                  **model_args):
+    def from_task(
+        cls,
+        task,
+        num_node_features=None,
+        num_classes=None,
+        graph_level=None,
+        multi_label=None,
+        **model_args
+    ):
         """ Try to create a model based on task metadata.
         Will fail if number of node features is not the default.
         """
@@ -37,18 +39,18 @@ class PygModel(torch.nn.Module):
         )
 
     def __init__(
-            self,
-            num_node_features,
-            num_classes,
-            num_unique_edge_attrs=20,
-            graph_level=False,
-            num_layers=2,
-            hidden_channels=128,
-            dropout_rate=0.5,
-            multi_label=False,
-            final_activation="sigmoid",
-            layer_type="rgcn",
-            device=None
+        self,
+        num_node_features,
+        num_classes,
+        num_unique_edge_attrs=20,
+        graph_level=False,
+        num_layers=2,
+        hidden_channels=128,
+        dropout_rate=0.5,
+        multi_label=False,
+        final_activation="sigmoid",
+        layer_type="rgcn",
+        device=None
     ):
         super().__init__()
         self.num_node_features = num_node_features
@@ -90,6 +92,8 @@ class PygModel(torch.nn.Module):
                 self.convs.append(NNConv(self.hidden_channels, self.hidden_channels, self.nn))
             elif self.layer_type in ["transformer"]:
                 self.convs.append(TransformerConv(self.hidden_channels, self.hidden_channels))
+            elif self.layer_type in ["rgat", "RGAT"]:
+                self.convs.append(RGATConv(self.hidden_channels, self.hidden_channels, self.num_unique_edge_attrs))
             else:
                 self.convs.append(RGCNConv(self.hidden_channels, self.hidden_channels, self.num_unique_edge_attrs))
             self.bns.append(BatchNorm1d(self.hidden_channels))
