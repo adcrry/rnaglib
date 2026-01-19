@@ -66,8 +66,11 @@ class DistographRepresentation(GraphRepresentation):
 
             if self.distogram_edges:
 
-                i, j = np.where(distogram[:,:,:self.B].sum(axis=2)>self.tau)
-                new_edges = torch.from_numpy(np.stack([i, j]))
+                proba_matrix = distogram[:,:,:self.B].sum(axis=2)
+                proba_matrix.fill_diagonal_(float(0))
+                new_edges = torch.nonzero(proba_matrix > self.tau, as_tuple=False)
+                new_edges = new_edges.t()
+
                 new_edge_attr = torch.full((new_edges.size(1),), max(self.edge_map.values())+1, dtype=torch.long)
                 pyg_graph.edge_index = torch.cat([pyg_graph.edge_index, new_edges], dim=1)
                 pyg_graph.edge_attr = torch.cat([pyg_graph.edge_attr, new_edge_attr], dim=0)
