@@ -80,10 +80,6 @@ class DistographRepresentation(GraphRepresentation):
                 #pyg_graph.edge_attr = torch.cat([pyg_graph.edge_attr.unsqueeze(1), edge_distances], dim=1)
 
             return pyg_graph
-        
-    @property
-    def name(self):
-        return "distograph"
 
     def batch(self, samples):
         """
