@@ -1,5 +1,7 @@
 import torch
 import networkx as nx
+from torch_geometric.utils import to_undirected
+from torch_geometric.nn.pool import knn_graph
 
 from rnaglib.config.graph_keys import GRAPH_KEYS, TOOL
 from rnaglib.algorithms import fix_buggy_edges
@@ -15,12 +17,15 @@ class GraphRepresentation(Representation):
     """
 
     def __init__(
-            self,
-            framework="nx",
-            clean_edges=True,
-            edge_map=GRAPH_KEYS["edge_map"][TOOL],
-            etype_key="LW",
-            **kwargs,
+        self,
+        framework="nx",
+        clean_edges=True,
+        edge_map=GRAPH_KEYS["edge_map"][TOOL],
+        etype_key="LW",
+        graph_construction="base_pair",
+        top_k=16,
+        threshold=10,
+        **kwargs,
     ):
 
         authorized_frameworks = {"nx", "dgl", "pyg"}
@@ -32,6 +37,10 @@ class GraphRepresentation(Representation):
         self.clean_edges = clean_edges
         self.etype_key = etype_key
         self.edge_map = edge_map
+
+        self.graph_construction = graph_construction
+        self.top_k = top_k
+        self.threshold = threshold
 
         super().__init__(**kwargs)
         pass
@@ -75,22 +84,59 @@ class GraphRepresentation(Representation):
         # not super efficient at the moment
         node_map = {n: i for i, n in enumerate(sorted(graph.nodes()))}
         x, y = None, None
+
         if "nt_features" in features_dict:
+
             x = (
                 torch.stack([features_dict["nt_features"][n] for n in node_map.keys()])
                 if "nt_features" in features_dict
                 else None
             )
+
         if "nt_targets" in features_dict:
+
             list_y = [features_dict["nt_targets"][n] for n in node_map.keys()]
             # In the case of single target, pytorch CE loss expects shape (n,) and not (n,1)
             # For multi-target cases, we stack to get (n,d)
             if len(list_y[0]) == 1:
+
                 y = torch.cat(list_y)
+
             else:
+
                 y = torch.stack(list_y)
+
         if "rna_targets" in features_dict:
+
             y = features_dict["rna_targets"].clone().detach()
+
+        if self.graph_construction in ["knn","threshold"]:
+
+            all_attrs = nx.get_node_attributes(graph, 'xyz_P')
+            nucleotide_coords_list = [all_attrs[n] for n in node_map.keys()]
+            nucleotide_coords = torch.tensor(nucleotide_coords_list)
+            # Compute full distance matrix [N, N]
+            dist_matrix = torch.cdist(nucleotide_coords, nucleotide_coords)
+
+            if self.graph_construction == "knn":
+                # Find k+1 smallest elements
+                _, indices = dist_matrix.topk(self.top_k + 1, largest=False)
+                # Remove the first column (self-loops)
+                neighbor_indices = indices[:, 1:]
+                neighbor_indices, _ = torch.sort(neighbor_indices, dim=1)
+                # Construct edge_index
+                source = torch.arange(nucleotide_coords.size(0), device=nucleotide_coords.device).repeat_interleave(self.top_k)
+                # targets: flatten the nearest neighbor indices
+                target = neighbor_indices.flatten()
+                edge_index= torch.stack([source, target], dim=0)
+
+            else:
+                dist_matrix = torch.cdist(nucleotide_coords, nucleotide_coords, p=2)
+                dist_matrix.fill_diagonal_(float('inf'))
+                edges = torch.nonzero(dist_matrix < self.threshold, as_tuple=False)
+                edge_index = edges.t()
+
+            return Data(x=x, y=y, edge_index=edge_index)
 
         edge_index = [[node_map[u], node_map[v]] for u, v in sorted(graph.edges())]
         edge_index = torch.tensor(edge_index, dtype=torch.long).T
