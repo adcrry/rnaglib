@@ -65,8 +65,8 @@ class DistographRepresentation(GraphRepresentation):
                 distogram = distogram_dict["distogram"]["softmax"]
 
             if self.distogram_edges:
-
-                proba_matrix = distogram[:,:,:self.B].sum(axis=2)
+                dist_tensor = torch.from_numpy(distogram)
+                proba_matrix = dist_tensor[:, :, :self.B].sum(dim=2)
                 proba_matrix.fill_diagonal_(float(0))
                 new_edges = torch.nonzero(proba_matrix > self.tau, as_tuple=False)
                 new_edges = new_edges.t()
