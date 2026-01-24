@@ -18,7 +18,7 @@ from rnaglib.utils import dump_json
 from rnaglib.transforms import Compose
 from rnaglib.transforms import CifMetadata
 from rnaglib.transforms import SmallMoleculeBindingTransform
-from rnaglib.transforms import SecondaryStructureTransform
+#from rnaglib.transforms import SecondaryStructureTransform
 from rnaglib.transforms import RBPTransform
 from rnaglib.prepare_data import fr3d_to_graph
 from rnaglib.prepare_data import chop_all
@@ -127,7 +127,7 @@ def build_graph_from_cif(cif_path, dump_dir=None):
     :return: graph if `dump_dir` is None, else return path to saved graph.
     """
     structures_dir = Path(cif_path).parent
-    graph = fr3d_to_graph(cif_path)
+    graph = fr3d_to_graph(cif_path, atom_coords_to_store=["P"])
     if graph is None:
         return None
 
@@ -135,7 +135,6 @@ def build_graph_from_cif(cif_path, dump_dir=None):
         CifMetadata(structures_dir=structures_dir),
         SmallMoleculeBindingTransform(structures_dir=structures_dir),
         RBPTransform(structures_dir=structures_dir, protein_number_annotations=True, distances=[4.0, 6.0, 8.0]),
-        SecondaryStructureTransform(structures_dir=structures_dir),
     ]
 
     T = Compose(transforms)

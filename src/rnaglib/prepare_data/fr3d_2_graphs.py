@@ -114,7 +114,7 @@ def nt_to_rgl(nt, pdbid):
     return f"{pdbid.lower()}.{chain}.{pos}"
 
 
-def fr3d_to_graph(rna_path):
+def fr3d_to_graph(rna_path, atom_coords_to_store=["P"]):
     """Use fr3d to generate networkx annotation graph.
 
     :param rna_path: path to a PDB of the RNA structure
@@ -179,16 +179,20 @@ def fr3d_to_graph(rna_path):
                 for res in structure[chain]:
                     if int(pos) == res.id[1]:  # got non-standard residue
                         r = res
-            try:
-                phos_coord = list(map(float, r["P"].get_coord()))
-            except KeyError:
-                phos_coord = np.mean([a.get_coord() for a in r], axis=0)
-                logger.warning(
-                    f"Couldn't find phosphate atom, taking center of atoms in residue instead for {pdbid}.{chain}.{pos} is at {phos_coord}."
-                )
-            logger.debug(f"{node} {phos_coord}")
-            coord_dict[node] = {"xyz_P": list(map(float, phos_coord))}
-        nx.set_node_attributes(G, coord_dict)
+            centroid_coord = np.mean([a.get_coord() for a in r], axis=0)
+            coord_dict[node] = {f"xyz_centroid": list(map(float, centroid_coord))}
+            nx.set_node_attributes(G, coord_dict)
+            for atom_type in atom_coords_to_store:
+                try:
+                    atom_coord = list(map(float, r[atom_type].get_coord()))
+                except KeyError:
+                    atom_coord = None
+                    logger.warning(
+                        f"Couldn't find {atom_type} atom"
+                    )
+                logger.debug(f"{node} {atom_coord}")
+                coord_dict[node] = {f"xyz_{atom_type}": atom_coord}
+                nx.set_node_attributes(G, coord_dict)
     except Exception as e:
         logger.exception(f"Failed to get coordinates for {pdbid}, {e}")
         return None
