@@ -25,6 +25,9 @@ class GraphRepresentation(Representation):
         graph_construction="base_pair",
         top_k=16,
         threshold=10,
+        representative="P",
+        purine_representative="P",
+        pyrimidine_representative="P",
         **kwargs,
     ):
 
@@ -41,6 +44,7 @@ class GraphRepresentation(Representation):
         self.graph_construction = graph_construction
         self.top_k = top_k
         self.threshold = threshold
+        self.representative = representative
 
         super().__init__(**kwargs)
         pass
@@ -111,10 +115,23 @@ class GraphRepresentation(Representation):
             y = features_dict["rna_targets"].clone().detach()
 
         if self.graph_construction in ["knn","threshold"]:
-
-            all_attrs = nx.get_node_attributes(graph, 'xyz_P')
-            nucleotide_coords_list = [all_attrs[n] for n in node_map.keys()]
-            nucleotide_coords = torch.tensor(nucleotide_coords_list)
+            if self.purine_representative != self.pyrimidine_representative:
+                all_attrs_pyrimidine_rep = nx.get_node_attributes(graph, f'xyz_{self.pyrimidine_representative}')
+                all_attrs_purine_rep = nx.get_node_attributes(graph, f'xyz_{self.purine_representative}')
+                all_attrs_base_identity = nx.get_node_attributes(graph, 'nt')
+                pyrimidine_rep_coords_list = [all_attrs_pyrimidine_rep[n] if all_attrs_pyrimidine_rep[n] is not None else float('nan') for n in node_map.keys()]
+                purine_rep_coords_list = [all_attrs_purine_rep[n] if all_attrs_purine_rep[n] is not None else float('nan') for n in node_map.keys()]
+                base_identity_list = [all_attrs_base_identity[n] if all_attrs_base_identity[n] is not None else float('nan') for n in node_map.keys()]
+                pyrimidine_rep_coords = torch.tensor(pyrimidine_rep_coords_list)
+                purine_rep_coords = torch.tensor(purine_rep_coords_list)
+                base_identity = torch.tensor(base_identity_list)
+                purine_mask = (base_identity=="A") or (base_identity=="G")
+                nucleotide_coords = purine_rep_coords*purine_mask+pyrimidine_rep_coords*(1-purine_mask)
+            else:
+                all_attrs = nx.get_node_attributes(graph, f'xyz_{self.representative}')
+                nucleotide_coords_list = [all_attrs[n] if all_attrs[n] is not None else float('nan') for n in node_map.keys()]
+                nucleotide_coords = torch.tensor(nucleotide_coords_list)
+                
             # Compute full distance matrix [N, N]
             dist_matrix = torch.cdist(nucleotide_coords, nucleotide_coords)
 
