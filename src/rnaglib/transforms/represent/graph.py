@@ -155,9 +155,9 @@ class GraphRepresentation(Representation):
 
             return Data(x=x, y=y, edge_index=edge_index)
 
-        edge_index = [[node_map[u], node_map[v]] for u, v in sorted(graph.edges())]
+        edge_index = [[node_map[u], node_map[v]] for u, v in sorted(graph.edges(), key=lambda x: (x[0].split('.')[1],int(x[0].split('.')[2]),x[1].split('.')[1],int(x[1].split('.')[2])))]
         edge_index = torch.tensor(edge_index, dtype=torch.long).T
-        edge_attrs = [self.edge_map[data[self.etype_key]] for u, v, data in sorted(graph.edges(data=True))]
+        edge_attrs = [self.edge_map[data[self.etype_key]] for u, v, data in sorted(graph.edges(data=True), key=lambda x: (x[0].split('.')[1],int(x[0].split('.')[2]),x[1].split('.')[1],int(x[1].split('.')[2])))]
         edge_attrs = torch.tensor(edge_attrs)
         return Data(x=x, y=y, edge_attr=edge_attrs, edge_index=edge_index)
 
