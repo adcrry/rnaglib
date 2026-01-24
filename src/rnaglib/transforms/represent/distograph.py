@@ -2,6 +2,7 @@ import os
 
 import pickle
 import torch
+import torch.nn.functional as F
 import networkx as nx
 import numpy as np
 
@@ -25,6 +26,7 @@ class DistographRepresentation(GraphRepresentation):
         clean_edges=True,
         edge_map=GRAPH_KEYS["edge_map"][TOOL],
         etype_key="LW",
+        distogram_only=False,
         **kwargs,
     ):
         self.distograms_path = distograms_path
@@ -34,6 +36,7 @@ class DistographRepresentation(GraphRepresentation):
         self.tau = tau
         self.distogram_files_prefix = distogram_files_prefix
         self.distogram_files_suffix = distogram_files_suffix
+        self.distogram_only = distogram_only
         super().__init__(framework, clean_edges, edge_map, etype_key, **kwargs)
         pass
 
@@ -72,15 +75,21 @@ class DistographRepresentation(GraphRepresentation):
                 new_edges = new_edges.t()
 
                 new_edge_attr = torch.full((new_edges.size(1),), max(self.edge_map.values())+1, dtype=torch.long)
-                pyg_graph.edge_index = torch.cat([pyg_graph.edge_index, new_edges], dim=1)
-                pyg_graph.edge_attr = torch.cat([pyg_graph.edge_attr, new_edge_attr], dim=0)
+
+                if self.distogram_only:
+                    pyg_graph.edge_index = new_edges
+                    pyg_graph.edge_attr = new_edge_attr
+                else:
+                    pyg_graph.edge_index = torch.cat([pyg_graph.edge_index, new_edges], dim=1)
+                    pyg_graph.edge_attr = torch.cat([pyg_graph.edge_attr, new_edge_attr], dim=0)
 
             if self.distogram_edge_features:
                 
                 row, col = pyg_graph.edge_index
                 edge_distances = torch.from_numpy(distogram[row,col])
-                pyg_graph.edge_attr = edge_distances
-                #pyg_graph.edge_attr = torch.cat([pyg_graph.edge_attr.unsqueeze(1), edge_distances], dim=1)
+                num_classes = len(self.edge_map)
+                edge_attr_one_hot = F.one_hot(pyg_graph.edge_attr.long(), num_classes=num_classes)
+                pyg_graph.edge_attr = torch.cat([edge_attr_one_hot, edge_distances], dim=1).float()
 
             return pyg_graph
 
