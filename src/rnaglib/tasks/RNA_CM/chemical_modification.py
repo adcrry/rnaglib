@@ -24,8 +24,9 @@ class ChemicalModification(ResidueClassificationTask):
     default_metric = "balanced_accuracy"
     version = "2.0.2"
 
-    def __init__(self, size_thresholds=(15, 500), **kwargs):
+    def __init__(self, size_thresholds=(15, 500), dataset_path=None, **kwargs):
         meta = {'multi_label': False}
+        self.dataset_path = dataset_path
         super().__init__(additional_metadata=meta, size_thresholds=size_thresholds, **kwargs)
 
     @property
@@ -64,7 +65,7 @@ class ChemicalModification(ResidueClassificationTask):
         connected_components_partition = ConnectedComponentPartition()
 
         # Run through database, applying our filters
-        dataset = RNADataset(debug=self.debug, in_memory=self.in_memory, version=self.version)
+        dataset = RNADataset(dataset_path=self.dataset_path, debug=self.debug, in_memory=self.in_memory, version=self.version)
         all_rnas = []
         for rna in tqdm(dataset):
             for rna_connected_component in connected_components_partition(rna):
