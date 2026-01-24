@@ -86,7 +86,7 @@ class GraphRepresentation(Representation):
 
         # for some reason from_networkx is not working so doing by hand
         # not super efficient at the moment
-        node_map = {n: i for i, n in enumerate(sorted(graph.nodes()))}
+        node_map = {n: i for i, n in enumerate(sorted(graph.nodes(), key=lambda x:(x.split('.')[1],int(x.split('.')[2]))))}
         x, y = None, None
 
         if "nt_features" in features_dict:
