@@ -121,9 +121,10 @@ class GraphRepresentation(Representation):
                 all_attrs_pyrimidine_rep = nx.get_node_attributes(graph, f'xyz_{self.pyrimidine_representative}')
                 all_attrs_purine_rep = nx.get_node_attributes(graph, f'xyz_{self.purine_representative}')
                 all_attrs_base_identity = nx.get_node_attributes(graph, 'nt')
-                pyrimidine_rep_coords_list = [all_attrs_pyrimidine_rep[n] if all_attrs_pyrimidine_rep[n] is not None else float('nan') for n in node_map.keys()]
-                purine_rep_coords_list = [all_attrs_purine_rep[n] if all_attrs_purine_rep[n] is not None else float('nan') for n in node_map.keys()]
+                pyrimidine_rep_coords_list = [all_attrs_pyrimidine_rep[n] if all_attrs_pyrimidine_rep[n] is not None else 3*[float('nan')] for n in node_map.keys()]
+                purine_rep_coords_list = [all_attrs_purine_rep[n] if all_attrs_purine_rep[n] is not None else 3*[float('nan')] for n in node_map.keys()]
                 purine_mask_list = [1 if all_attrs_base_identity[n] in ["A","G"] else 0 for n in node_map.keys()]
+                print(pyrimidine_rep_coords_list)
                 pyrimidine_rep_coords = torch.tensor(pyrimidine_rep_coords_list)
                 purine_rep_coords = torch.tensor(purine_rep_coords_list)
                 purine_mask = torch.tensor(purine_mask_list)
