@@ -74,7 +74,9 @@ class DistographRepresentation(GraphRepresentation):
                 new_edges = torch.nonzero(proba_matrix > self.tau, as_tuple=False)
                 new_edges = new_edges.t()
 
-                new_edge_attr = torch.full((new_edges.size(1),), max(self.edge_map.values())+1, dtype=torch.long)
+                max_occupied_index = max(self.edge_map.values()) if self.graph_construction=="base_pair" else 0
+
+                new_edge_attr = torch.full((new_edges.size(1),), max_occupied_index+1, dtype=torch.long)
 
                 if self.distogram_only:
                     pyg_graph.edge_index = new_edges

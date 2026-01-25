@@ -117,7 +117,9 @@ class GraphRepresentation(Representation):
             y = features_dict["rna_targets"].clone().detach()
 
         if self.graph_construction in ["knn","threshold"]:
+
             if self.purine_representative != self.pyrimidine_representative:
+
                 all_attrs_pyrimidine_rep = nx.get_node_attributes(graph, f'xyz_{self.pyrimidine_representative}')
                 all_attrs_purine_rep = nx.get_node_attributes(graph, f'xyz_{self.purine_representative}')
                 all_attrs_base_identity = nx.get_node_attributes(graph, 'nt')
@@ -128,7 +130,9 @@ class GraphRepresentation(Representation):
                 purine_rep_coords = torch.tensor(purine_rep_coords_list)
                 purine_mask = torch.tensor(purine_mask_list)
                 nucleotide_coords = purine_rep_coords*purine_mask.view(-1,1)+pyrimidine_rep_coords*(1-purine_mask).view(-1,1)
+
             else:
+
                 all_attrs = nx.get_node_attributes(graph, f'xyz_{self.representative}')
                 nucleotide_coords_list = [all_attrs[n] if all_attrs[n] is not None else float('nan') for n in node_map.keys()]
                 nucleotide_coords = torch.tensor(nucleotide_coords_list)
@@ -137,6 +141,7 @@ class GraphRepresentation(Representation):
             dist_matrix = torch.cdist(nucleotide_coords, nucleotide_coords)
 
             if self.graph_construction == "knn":
+
                 # Find k+1 smallest elements
                 _, indices = dist_matrix.topk(self.top_k + 1, largest=False)
                 # Remove the first column (self-loops)
@@ -149,12 +154,14 @@ class GraphRepresentation(Representation):
                 edge_index= torch.stack([source, target], dim=0)
 
             else:
+
                 dist_matrix = torch.cdist(nucleotide_coords, nucleotide_coords, p=2)
                 dist_matrix.fill_diagonal_(float('inf'))
                 edges = torch.nonzero(dist_matrix < self.threshold, as_tuple=False)
                 edge_index = edges.t()
+                edge_attrs = torch.zeros(edge_index.shape[1],dtype=int)
 
-            return Data(x=x, y=y, edge_index=edge_index)
+            return Data(x=x, y=y, edge_attr=edge_attrs, edge_index=edge_index)
 
         edge_index = [[node_map[u], node_map[v]] for u, v in sorted(graph.edges(), key=lambda x: (x[0].split('.')[1],int(x[0].split('.')[2]),x[1].split('.')[1],int(x[1].split('.')[2])))]
         edge_index = torch.tensor(edge_index, dtype=torch.long).T
