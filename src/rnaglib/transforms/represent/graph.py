@@ -45,6 +45,8 @@ class GraphRepresentation(Representation):
         self.top_k = top_k
         self.threshold = threshold
         self.representative = representative
+        self.purine_representative = purine_representative
+        self.pyrimidine_representative = pyrimidine_representative
 
         super().__init__(**kwargs)
         pass
