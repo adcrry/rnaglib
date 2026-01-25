@@ -32,8 +32,9 @@ class BenchmarkBindingSite(ResidueClassificationTask):
     version = "2.0.2"
     default_metric = "balanced_accuracy"
 
-    def __init__(self, cutoff=6.0, **kwargs):
+    def __init__(self, cutoff=6.0,graph_path=None, **kwargs):
         self.cutoff = cutoff
+        self.graph_path = graph_path
         meta = {"multi_label": False}
         super().__init__(additional_metadata=meta, **kwargs)
 
@@ -58,7 +59,7 @@ class BenchmarkBindingSite(ResidueClassificationTask):
         :rtype: RNADataset
         """
         dataset = RNADataset(
-            dataset_path=self.dataset_path, 
+            dataset_path=self.graph_path, 
             debug=self.debug,
             in_memory=self.in_memory,
             redundancy="all",
@@ -120,9 +121,9 @@ class BindingSite(ResidueClassificationTask):
     version = "2.0.2"
     default_metric = "balanced_accuracy"
 
-    def __init__(self, cutoff=6.0, size_thresholds=(15, 500), dataset_path=None, **kwargs):
+    def __init__(self, cutoff=6.0, size_thresholds=(15, 500), graph_path=None, **kwargs):
         self.target_var = f"binding_small-molecule-{cutoff}A"
-        self.dataset_path = dataset_path
+        self.graph_path = graph_path
         meta = {"multi_label": False}
         super().__init__(additional_metadata=meta, size_thresholds=size_thresholds, **kwargs)
 
@@ -146,7 +147,7 @@ class BindingSite(ResidueClassificationTask):
         connected_component_filters = ComposeFilters(connected_component_filters_list)
 
         # Run through database, applying our filters
-        dataset = RNADataset(dataset_path=self.dataset_path, debug=self.debug, in_memory=self.in_memory, redundancy="all", version=self.version)
+        dataset = RNADataset(dataset_path=self.graph_path, debug=self.debug, in_memory=self.in_memory, redundancy="all", version=self.version)
         all_rnas = []
         os.makedirs(self.dataset_path, exist_ok=True)
         for rna in tqdm(dataset, total=len(dataset), desc="Processing RNAs"):
