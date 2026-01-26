@@ -7,7 +7,7 @@ import networkx as nx
 import numpy as np
 
 from rnaglib.config.graph_keys import GRAPH_KEYS, TOOL
-from rnaglib.algorithms import fix_buggy_edges
+from rnaglib.algorithms import fix_buggy_edges, get_sequences
 
 from .graph import GraphRepresentation
 
@@ -22,11 +22,12 @@ class DistographRepresentation(GraphRepresentation):
         tau=1e-4,
         distogram_files_prefix="distogram_",
         distogram_files_suffix="_model_0.pkl",
-        framework="nx",
+        framework="pyg",
         clean_edges=True,
         edge_map=GRAPH_KEYS["edge_map"][TOOL],
         etype_key="LW",
         distogram_only=False,
+        one_hot=True,
         **kwargs,
     ):
         self.distograms_path = distograms_path
@@ -37,6 +38,7 @@ class DistographRepresentation(GraphRepresentation):
         self.distogram_files_prefix = distogram_files_prefix
         self.distogram_files_suffix = distogram_files_suffix
         self.distogram_only = distogram_only
+        self.one_hot = one_hot
         super().__init__(framework, clean_edges, edge_map, etype_key, **kwargs)
         pass
 
@@ -71,27 +73,43 @@ class DistographRepresentation(GraphRepresentation):
                 dist_tensor = torch.from_numpy(distogram)
                 proba_matrix = dist_tensor[:, :, :self.B].sum(dim=2)
                 proba_matrix.fill_diagonal_(float(0))
-                new_edges = torch.nonzero(proba_matrix > self.tau, as_tuple=False)
-                new_edges = new_edges.t()
+                new_edge_indices = torch.nonzero(proba_matrix > self.tau, as_tuple=False)
+
+                chain_dict = get_sequences(base_graph)
+                sorted_distogram_residues = [item for chain in sorted(chain_dict.keys()) for item in chain_dict[chain][1]]
+                node_map = {n: i for i, n in enumerate(sorted(base_graph.nodes(), key=lambda x:(x.split('.')[1],int(x.split('.')[2]))))}
+                new_edges = [node_map[sorted_distogram_residues[u]],node_map[sorted_distogram_residues[v]] for u, v in new_edge_indices]
+                new_edges = torch.tensor(new_edges, dtype=torch.long).T
 
                 max_occupied_index = max(self.edge_map.values()) if self.graph_construction=="base_pair" else 0
 
                 new_edge_attr = torch.full((new_edges.size(1),), max_occupied_index+1, dtype=torch.long)
 
                 if self.distogram_only:
+
                     pyg_graph.edge_index = new_edges
                     pyg_graph.edge_attr = new_edge_attr
+
                 else:
+
                     pyg_graph.edge_index = torch.cat([pyg_graph.edge_index, new_edges], dim=1)
                     pyg_graph.edge_attr = torch.cat([pyg_graph.edge_attr, new_edge_attr], dim=0)
 
             if self.distogram_edge_features:
                 
                 row, col = pyg_graph.edge_index
+                print(f"rna_graph.name={rna_graph.name}\n max(row)={max(row)}\n max(col)={max(col)}\n distogram.shape={distogram.shape}")
                 edge_distances = torch.from_numpy(distogram[row,col])
-                num_classes = len(self.edge_map)
-                edge_attr_one_hot = F.one_hot(pyg_graph.edge_attr.long(), num_classes=num_classes)
-                pyg_graph.edge_attr = torch.cat([edge_attr_one_hot, edge_distances], dim=1).float()
+
+                if self.one_hot:
+
+                    num_classes = len(self.edge_map) + int(self.distogram_edges)
+                    edge_attr_one_hot = F.one_hot(pyg_graph.edge_attr.long(), num_classes=num_classes)
+                    pyg_graph.edge_feats = torch.cat([edge_attr_one_hot, edge_distances], dim=1).float()
+
+                else:
+
+                    pyg_graph.edge_feats = edge_distances
 
             return pyg_graph
 
