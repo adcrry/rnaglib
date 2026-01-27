@@ -69,16 +69,15 @@ class DistographRepresentation(GraphRepresentation):
                 distogram_dict = pickle.load(f)
                 distogram = distogram_dict["distogram"]["softmax"]
             
+            nb_bins = distogram.shape[2]
             chain_dict = get_sequences(base_graph)
             sorted_distogram_residues = [item for chain in sorted(chain_dict.keys()) for item in chain_dict[chain][1]]
-            nb_bins = distogram.shape[2]
 
             if self.distogram_edges:
                 dist_tensor = torch.from_numpy(distogram)
                 proba_matrix = dist_tensor[:, :, :self.B].sum(dim=2)
                 proba_matrix.fill_diagonal_(float(0))
                 new_edge_indices = torch.nonzero(proba_matrix > self.tau, as_tuple=False)
-                
                 node_map = {n: i for i, n in enumerate(sorted(base_graph.nodes(), key=lambda x:(x.split('.')[1],int(x.split('.')[2]))))}
                 new_edges = [[node_map[sorted_distogram_residues[u]],node_map[sorted_distogram_residues[v]]] for u, v in new_edge_indices]
                 new_edges = torch.tensor(new_edges, dtype=torch.long).T

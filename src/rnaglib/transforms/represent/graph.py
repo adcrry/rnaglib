@@ -155,11 +155,17 @@ class GraphRepresentation(Representation):
             # targets: flatten the nearest neighbor indices
             target = neighbor_indices.flatten()
             edge_index= torch.stack([source, target], dim=0)
+<<<<<<< HEAD
             edge_attrs = torch.zeros(edge_index.shape[1],dtype=int)
 
         elif self.graph_construction == "threshold":
             edges = torch.nonzero(dist_matrix < self.threshold, as_tuple=False)
             edge_attrs = torch.zeros(edge_index.shape[1],dtype=int)
+=======
+
+        elif self.graph_construction == "threshold":
+            edges = torch.nonzero(dist_matrix < self.threshold, as_tuple=False)
+>>>>>>> 70fdf59f1e46542d77c7d48f3930e1d152e223e0
             edge_index = edges.t()
 
         else:
@@ -171,6 +177,10 @@ class GraphRepresentation(Representation):
         if self.distance_edge_features:
             edge_distances = dist_matrix[edge_index[0, :], edge_index[1, :]]
             edge_feats = rbf_expand(dists=edge_distances, num_bins=64, min_distance=2.0, max_distance=22.0)
+<<<<<<< HEAD
+=======
+            edge_attrs = torch.zeros(edge_index.shape[1],dtype=int)
+>>>>>>> 70fdf59f1e46542d77c7d48f3930e1d152e223e0
             return Data(x=x, y=y, edge_attr=edge_attrs, edge_index=edge_index, edge_feats=edge_feats)
         
         return Data(x=x, y=y, edge_attr=edge_attrs, edge_index=edge_index)
