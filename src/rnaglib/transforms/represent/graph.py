@@ -159,8 +159,8 @@ class GraphRepresentation(Representation):
 
         elif self.graph_construction == "threshold":
             edges = torch.nonzero(dist_matrix < self.threshold, as_tuple=False)
-            edge_attrs = torch.zeros(edge_index.shape[1],dtype=int)
             edge_index = edges.t()
+            edge_attrs = torch.zeros(edge_index.shape[1],dtype=int)
 
         else:
             edge_index = [[node_map[u], node_map[v]] for u, v in sorted(graph.edges(), key=lambda x: (x[0].split('.')[1],int(x[0].split('.')[2]),x[1].split('.')[1],int(x[1].split('.')[2])))]
