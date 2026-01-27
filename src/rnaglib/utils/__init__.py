@@ -18,6 +18,8 @@ from .misc import tonumpy
 from .task_utils import print_statistics
 from .task_utils import DummyResidueModel, DummyGraphModel
 
+from .represent_utils import rbf_expand
+
 from .wrappers import rna_align_wrapper, cdhit_wrapper, locarna_wrapper, US_align_wrapper
 
 __all__ = [
