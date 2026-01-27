@@ -5,6 +5,7 @@ from torch_geometric.nn.pool import knn_graph
 
 from rnaglib.config.graph_keys import GRAPH_KEYS, TOOL
 from rnaglib.algorithms import fix_buggy_edges
+from rnaglib.utils import rbf_expand
 
 from .representation import Representation
 
@@ -28,6 +29,7 @@ class GraphRepresentation(Representation):
         representative="P",
         purine_representative="P",
         pyrimidine_representative="P",
+        distance_edge_features=False,
         **kwargs,
     ):
 
@@ -47,6 +49,7 @@ class GraphRepresentation(Representation):
         self.representative = representative
         self.purine_representative = purine_representative
         self.pyrimidine_representative = pyrimidine_representative
+        self.distance_edge_features = distance_edge_features
 
         super().__init__(**kwargs)
         pass
@@ -116,7 +119,7 @@ class GraphRepresentation(Representation):
 
             y = features_dict["rna_targets"].clone().detach()
 
-        if self.graph_construction in ["knn","threshold"]:
+        if self.graph_construction in ["knn","threshold"] or self.distance_edge_features:
 
             if self.purine_representative != self.pyrimidine_representative:
 
@@ -139,35 +142,38 @@ class GraphRepresentation(Representation):
                 
             # Compute full distance matrix [N, N]
             dist_matrix = torch.cdist(nucleotide_coords, nucleotide_coords)
+            dist_matrix.fill_diagonal_(float('inf'))
 
-            if self.graph_construction == "knn":
+        if self.graph_construction == "knn":
+            # Find k+1 smallest elements
+            _, indices = dist_matrix.topk(self.top_k + 1, largest=False)
+            # Remove the first column (self-loops)
+            neighbor_indices = indices[:, 1:]
+            neighbor_indices, _ = torch.sort(neighbor_indices, dim=1)
+            # Construct edge_index
+            source = torch.arange(nucleotide_coords.size(0), device=nucleotide_coords.device).repeat_interleave(self.top_k)
+            # targets: flatten the nearest neighbor indices
+            target = neighbor_indices.flatten()
+            edge_index= torch.stack([source, target], dim=0)
 
-                # Find k+1 smallest elements
-                _, indices = dist_matrix.topk(self.top_k + 1, largest=False)
-                # Remove the first column (self-loops)
-                neighbor_indices = indices[:, 1:]
-                neighbor_indices, _ = torch.sort(neighbor_indices, dim=1)
-                # Construct edge_index
-                source = torch.arange(nucleotide_coords.size(0), device=nucleotide_coords.device).repeat_interleave(self.top_k)
-                # targets: flatten the nearest neighbor indices
-                target = neighbor_indices.flatten()
-                edge_index= torch.stack([source, target], dim=0)
+        elif self.graph_construction == "threshold":
+            edges = torch.nonzero(dist_matrix < self.threshold, as_tuple=False)
+            edge_index = edges.t()
 
-            else:
+        else:
+            edge_index = [[node_map[u], node_map[v]] for u, v in sorted(graph.edges(), key=lambda x: (x[0].split('.')[1],int(x[0].split('.')[2]),x[1].split('.')[1],int(x[1].split('.')[2])))]
+            edge_index = torch.tensor(edge_index, dtype=torch.long).T
+            edge_attrs = [self.edge_map[data[self.etype_key]] for u, v, data in sorted(graph.edges(data=True), key=lambda x: (x[0].split('.')[1],int(x[0].split('.')[2]),x[1].split('.')[1],int(x[1].split('.')[2])))]
+            edge_attrs = torch.tensor(edge_attrs)
 
-                dist_matrix = torch.cdist(nucleotide_coords, nucleotide_coords, p=2)
-                dist_matrix.fill_diagonal_(float('inf'))
-                edges = torch.nonzero(dist_matrix < self.threshold, as_tuple=False)
-                edge_index = edges.t()
-                edge_attrs = torch.zeros(edge_index.shape[1],dtype=int)
-
-            return Data(x=x, y=y, edge_attr=edge_attrs, edge_index=edge_index)
-
-        edge_index = [[node_map[u], node_map[v]] for u, v in sorted(graph.edges(), key=lambda x: (x[0].split('.')[1],int(x[0].split('.')[2]),x[1].split('.')[1],int(x[1].split('.')[2])))]
-        edge_index = torch.tensor(edge_index, dtype=torch.long).T
-        edge_attrs = [self.edge_map[data[self.etype_key]] for u, v, data in sorted(graph.edges(data=True), key=lambda x: (x[0].split('.')[1],int(x[0].split('.')[2]),x[1].split('.')[1],int(x[1].split('.')[2])))]
-        edge_attrs = torch.tensor(edge_attrs)
+        if self.distance_edge_features:
+            edge_distances = dist_matrix[edge_index[0, :], edge_index[1, :]]
+            edge_feats = rbf_expand(dists=edge_distances, num_bins=64, min_distance=2.0, max_distance=22.0)
+            edge_attrs = torch.zeros(edge_index.shape[1],dtype=int)
+            return Data(x=x, y=y, edge_attr=edge_attrs, edge_index=edge_index, edge_feats=edge_feats)
+        
         return Data(x=x, y=y, edge_attr=edge_attrs, edge_index=edge_index)
+
 
     @property
     def name(self):
@@ -193,4 +199,8 @@ class GraphRepresentation(Representation):
             # sometimes batching changes dtype from int to float32?
             batch.edge_index = batch.edge_index.to(torch.int64)
             batch.edge_attr = batch.edge_attr.to(torch.int64)
+            try:
+                batch.edge_feats = batch.edge_feats.to(torch.int64)
+            except:
+                pass
             return batch
