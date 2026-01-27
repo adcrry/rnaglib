@@ -68,6 +68,10 @@ class DistographRepresentation(GraphRepresentation):
 
                 distogram_dict = pickle.load(f)
                 distogram = distogram_dict["distogram"]["softmax"]
+            
+            nb_bins = distogram.shape[2]
+            chain_dict = get_sequences(base_graph)
+            sorted_distogram_residues = [item for chain in sorted(chain_dict.keys()) for item in chain_dict[chain][1]]
 
             if self.distogram_edges:
                 dist_tensor = torch.from_numpy(distogram)
@@ -75,10 +79,8 @@ class DistographRepresentation(GraphRepresentation):
                 proba_matrix.fill_diagonal_(float(0))
                 new_edge_indices = torch.nonzero(proba_matrix > self.tau, as_tuple=False)
 
-                chain_dict = get_sequences(base_graph)
-                sorted_distogram_residues = [item for chain in sorted(chain_dict.keys()) for item in chain_dict[chain][1]]
                 node_map = {n: i for i, n in enumerate(sorted(base_graph.nodes(), key=lambda x:(x.split('.')[1],int(x.split('.')[2]))))}
-                new_edges = [node_map[sorted_distogram_residues[u]],node_map[sorted_distogram_residues[v]] for u, v in new_edge_indices]
+                new_edges = [[node_map[sorted_distogram_residues[u]],node_map[sorted_distogram_residues[v]]] for u, v in new_edge_indices]
                 new_edges = torch.tensor(new_edges, dtype=torch.long).T
 
                 max_occupied_index = max(self.edge_map.values()) if self.graph_construction=="base_pair" else 0
@@ -96,10 +98,19 @@ class DistographRepresentation(GraphRepresentation):
                     pyg_graph.edge_attr = torch.cat([pyg_graph.edge_attr, new_edge_attr], dim=0)
 
             if self.distogram_edge_features:
-                
-                row, col = pyg_graph.edge_index
-                print(f"rna_graph.name={rna_graph.name}\n max(row)={max(row)}\n max(col)={max(col)}\n distogram.shape={distogram.shape}")
-                edge_distances = torch.from_numpy(distogram[row,col])
+
+                distogram_map = {n: i for i, n in enumerate(sorted_distogram_residues)}
+                sorted_graph_residues = sorted(pyg_graph.nodes(), key=lambda x:(x.split('.')[1],int(x.split('.')[2])))
+
+                edge_distances = []
+                for i, j in pyg_graph.edge_index.t():
+                    try:
+                        edge_distance = distogram_map[sorted_graph_residues[i],sorted_graph_residues[j]]
+                    except:
+                        edge_distance = np.zeros(nb_bins)
+                    edge_distances.append(edge_distance)
+                edge_distances = torch.tensor(edge_distances)
+
 
                 if self.one_hot:
 
