@@ -5,6 +5,7 @@ from torch.nn import BatchNorm1d, Dropout
 from torch_geometric.nn import RGCNConv, GCNConv, NNConv, GATConv, RGATConv, TransformerConv, global_mean_pool
 
 from rnaglib.utils.misc import tonumpy
+#from .edge_rgcn import EdgeRGCNConv
 
 
 class PygModel(torch.nn.Module):
@@ -50,6 +51,7 @@ class PygModel(torch.nn.Module):
         multi_label=False,
         final_activation="sigmoid",
         layer_type="rgcn",
+        num_edge_features=64,
         device=None
     ):
         super().__init__()
@@ -62,6 +64,7 @@ class PygModel(torch.nn.Module):
         self.dropout_rate = dropout_rate
         self.multi_label = multi_label
         self.layer_type = layer_type
+        self.num_edge_features = num_edge_features
 
         self.convs = torch.nn.ModuleList()
         self.bns = torch.nn.ModuleList()
@@ -90,10 +93,12 @@ class PygModel(torch.nn.Module):
             elif self.layer_type in ["edge_gcn","edge_GCN"]:
                 self.nn = torch.nn.Sequential(torch.nn.Linear(self.num_unique_edge_attrs, 32), torch.nn.ReLU(), torch.nn.Linear(32, self.hidden_channels**2))
                 self.convs.append(NNConv(self.hidden_channels, self.hidden_channels, self.nn))
+            # elif self.layer_type in ["edge_rgcn","edge_RGCN"]:
+            #     self.convs.append(EdgeRGCNConv(self.hidden_channels, self.hidden_channels, self.num_unique_edge_attrs, self.num_edge_features))
             elif self.layer_type in ["transformer"]:
                 self.convs.append(TransformerConv(self.hidden_channels, self.hidden_channels))
-            elif self.layer_type in ["rgat", "RGAT"]:
-                self.convs.append(RGATConv(self.hidden_channels, self.hidden_channels, self.num_unique_edge_attrs))
+            elif self.layer_type in ["rgat", "RGAT", "edge_rgat", "edge_RGAT"]:
+                self.convs.append(RGATConv(self.hidden_channels, self.hidden_channels, self.num_unique_edge_attrs, edge_dim=self.num_edge_features))
             else:
                 self.convs.append(RGCNConv(self.hidden_channels, self.hidden_channels, self.num_unique_edge_attrs))
             self.bns.append(BatchNorm1d(self.hidden_channels))
@@ -134,15 +139,23 @@ class PygModel(torch.nn.Module):
         self.configure_training()
 
     def forward(self, data):
-        x, edge_index, edge_type, batch = data.x, data.edge_index, data.edge_attr, data.batch
-
+        x, edge_index, edge_attrs, batch = data.x, data.edge_index, data.edge_attr, data.batch
+        try:
+            edge_feats = data.edge_feats
+        except:
+            pass
         x = self.input_non_linear_layer(x)
 
         for i in range(self.num_layers):
+            
             if self.layer_type in ["gcn", "GCN", "gat", "GAT"]:
                 x = self.convs[i](x, edge_index)
+            elif self.layer_type in ["edge_rgcn", "edge_RGCN", "edge_rgat", "edge_RGAT"]:
+                x = self.convs[i](x, edge_index, edge_attrs, edge_feats)
+            elif self.layer_type in ["edge_gat", "edge_GAT", "edge_gcn", "edge_GCN"]:
+                x = self.convs[i](x, edge_index, edge_feats)
             else:
-                x = self.convs[i](x, edge_index, edge_type)
+                x = self.convs[i](x, edge_index, edge_attrs)
             x = self.bns[i](x)
             x = F.relu(x)
             x = self.dropouts[i](x)
