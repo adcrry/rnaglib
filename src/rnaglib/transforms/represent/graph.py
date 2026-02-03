@@ -1,5 +1,6 @@
 import torch
 import networkx as nx
+import copy
 from torch_geometric.utils import to_undirected
 from torch_geometric.nn.pool import knn_graph
 
@@ -142,11 +143,13 @@ class GraphRepresentation(Representation):
                 
             # Compute full distance matrix [N, N]
             dist_matrix = torch.cdist(nucleotide_coords, nucleotide_coords)
-            dist_matrix.fill_diagonal_(float('inf'))
+            
 
         if self.graph_construction == "knn":
             # Find k+1 smallest elements
-            _, indices = dist_matrix.topk(self.top_k + 1, largest=False)
+            graph_dist_matrix = copy.deepcopy(dist_matrix)
+            graph_dist_matrix.fill_diagonal_(float('inf'))
+            _, indices = graph_dist_matrix.topk(self.top_k + 1, largest=False)
             # Remove the first column (self-loops)
             neighbor_indices = indices[:, 1:]
             neighbor_indices, _ = torch.sort(neighbor_indices, dim=1)
@@ -158,7 +161,9 @@ class GraphRepresentation(Representation):
             edge_attrs = torch.zeros(edge_index.shape[1],dtype=int)
 
         elif self.graph_construction == "threshold":
-            edges = torch.nonzero(dist_matrix < self.threshold, as_tuple=False)
+            graph_dist_matrix = copy.deepcopy(dist_matrix)
+            graph_dist_matrix.fill_diagonal_(float('inf'))
+            edges = torch.nonzero(graph_dist_matrix < self.threshold, as_tuple=False)
             edge_index = edges.t()
             edge_attrs = torch.zeros(edge_index.shape[1],dtype=int)
 
@@ -170,6 +175,7 @@ class GraphRepresentation(Representation):
 
         if self.distance_edge_features:
             edge_distances = dist_matrix[edge_index[0, :], edge_index[1, :]]
+            edge_distances.nan_to_num_(nan=0.0)
             edge_feats = rbf_expand(dists=edge_distances, num_bins=64, min_distance=2.0, max_distance=22.0)
             return Data(x=x, y=y, edge_attr=edge_attrs, edge_index=edge_index, edge_feats=edge_feats)
         
