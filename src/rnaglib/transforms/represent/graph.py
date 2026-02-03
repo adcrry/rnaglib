@@ -201,7 +201,8 @@ class GraphRepresentation(Representation):
             batch.edge_index = batch.edge_index.to(torch.int64)
             batch.edge_attr = batch.edge_attr.to(torch.int64)
             try:
-                batch.edge_feats = batch.edge_feats.to(torch.int64)
+                batch.edge_feats = batch.edge_feats.to(torch.float32)
             except:
                 pass
+            batch.has_edge_feats_mask = torch.tensor([~torch.isnan(sample.edge_feats).any() for sample in samples])
             return batch

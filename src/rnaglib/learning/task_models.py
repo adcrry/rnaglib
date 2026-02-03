@@ -138,12 +138,26 @@ class PygModel(torch.nn.Module):
 
         self.configure_training()
 
-    def forward(self, data):
+    def forward(self, data, return_mask=False):
         x, edge_index, edge_attrs, batch = data.x, data.edge_index, data.edge_attr, data.batch
-        try:
-            edge_feats = data.edge_feats
-        except:
-            pass
+        edge_batch = batch[edge_index[0]]
+
+        # Per-edge: does this edge have a NaN?
+        nan_mask_edges = torch.isnan(data.edge_feats).any(dim=1).float()  # [num_edges]
+
+        # Per-graph: does any edge in this graph have a NaN? (max reduce: 1.0 if any NaN)
+        num_graphs = batch.max().item() + 1
+        graph_has_nan = torch.zeros(num_graphs, device=batch.device).scatter_reduce(
+            0, edge_batch, nan_mask_edges, reduce="amax"
+        ).bool()
+
+        # Propagate back to edges
+        clean_edge_mask = ~graph_has_nan[edge_batch]  # [num_edges]
+
+        # Zero out edges belonging to graphs with NaNs
+        edge_feats = data.edge_feats.clone()
+        edge_feats[~clean_edge_mask] = 0.0
+
         x = self.input_non_linear_layer(x)
 
         for i in range(self.num_layers):
@@ -164,6 +178,19 @@ class PygModel(torch.nn.Module):
             x = global_mean_pool(x, batch)
         x = self.final_linear(x)
         x = self.final_activation(x)
+        if return_mask:
+            # For graph-level: check if batch has edge_feats attribute
+            # For node-level: create mask based on whether data has edge_feats
+            if self.graph_level:
+                # Assuming you add a flag to the batch data
+                mask = torch.ones(x.size(0), dtype=torch.bool, device=x.device)
+                if hasattr(data, 'has_edge_feats_mask'):
+                    mask = data.has_edge_feats_mask
+            else:
+                # For node-level, all nodes in a graph share the same edge features status
+                #mask = ~torch.isnan(data.edge_feats).any(dim=1)
+                mask =  ~graph_has_nan[batch]
+            return x, mask
         return x
 
     def configure_training(self, learning_rate=0.001):
@@ -172,7 +199,15 @@ class PygModel(torch.nn.Module):
         self.criterion = self.criterion.to(self.device)  # Move criterion to device for all cases
         self.optimizer = torch.optim.Adam(self.parameters(), lr=learning_rate)
 
-    def compute_loss(self, out, target, weighted=False, metadata=None):
+    def compute_loss(self, out, target, weighted=False, metadata=None, mask=None):
+        # Apply mask if provided
+        if mask is not None:
+            out = out[mask]
+            target = target[mask]
+            
+            # If no valid samples remain, return zero loss
+            if out.size(0) == 0:
+                return torch.tensor(0.0, device=out.device, requires_grad=True)
         # If just two classes, flatten outputs since BCE behavior expects equal dimensions and CE (N,k):(N)
         # Otherwise CE expects long as outputs
         if not self.multi_label:
@@ -209,8 +244,8 @@ class PygModel(torch.nn.Module):
             for batch in task.train_dataloader:
                 graph = batch["graph"].to(self.device)
                 self.optimizer.zero_grad()
-                out = self(graph)
-                loss = self.compute_loss(out, graph.y)
+                out, mask = self(graph, return_mask=True)
+                loss = self.compute_loss(out, graph.y, mask=mask)
                 loss.backward()
                 self.optimizer.step()
                 epoch_loss += loss.item()
@@ -238,13 +273,14 @@ class PygModel(torch.nn.Module):
         all_preds = []
         all_labels = []
         total_loss = 0
+        num_valid_samples = 0
         with torch.no_grad():
             for batch in loader:
                 graph = batch["graph"]
                 graph = graph.to(self.device)
-                out = self(graph)
+                out, mask = self(graph, return_mask=True)
                 labels = graph.y
-                loss = self.compute_loss(out, labels)
+                loss = self.compute_loss(out, labels, mask=mask)
                 total_loss += loss.item()
 
                 # For binary/multilabel, threshold the logits at 0 (equivalent to prob > 0.5 after sigmoid)
@@ -254,6 +290,7 @@ class PygModel(torch.nn.Module):
                 probs = tonumpy(probs)
                 preds = tonumpy(preds)
                 labels = tonumpy(labels)
+                mask_np = tonumpy(mask)
 
                 # split predictions per RNA if residue level
                 if not self.graph_level:
@@ -270,6 +307,8 @@ class PygModel(torch.nn.Module):
                         labels[start:end]
                         for start, end in zip(cumulative_sizes[:-1], cumulative_sizes[1:], strict=False)
                     ]
+                    mask_np = [mask_np[start:end] for start, end in zip(cumulative_sizes[:-1], cumulative_sizes[1:], strict=False)]
+            
                 all_probs.extend(probs)
                 all_preds.extend(preds)
                 all_labels.extend(labels)
