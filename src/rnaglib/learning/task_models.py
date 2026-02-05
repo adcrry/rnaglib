@@ -142,21 +142,22 @@ class PygModel(torch.nn.Module):
         x, edge_index, edge_attrs, batch = data.x, data.edge_index, data.edge_attr, data.batch
         edge_batch = batch[edge_index[0]]
 
-        # Per-edge: does this edge have a NaN?
-        nan_mask_edges = torch.isnan(data.edge_feats).any(dim=1).float()  # [num_edges]
+        if hasattr(data,"edge_feats"):
+            # Per-edge: does this edge have a NaN?
+            nan_mask_edges = torch.isnan(data.edge_feats).any(dim=1).float()  # [num_edges]
 
-        # Per-graph: does any edge in this graph have a NaN? (max reduce: 1.0 if any NaN)
-        num_graphs = batch.max().item() + 1
-        graph_has_nan = torch.zeros(num_graphs, device=batch.device).scatter_reduce(
-            0, edge_batch, nan_mask_edges, reduce="amax"
-        ).bool()
+            # Per-graph: does any edge in this graph have a NaN? (max reduce: 1.0 if any NaN)
+            num_graphs = batch.max().item() + 1
+            graph_has_nan = torch.zeros(num_graphs, device=batch.device).scatter_reduce(
+                0, edge_batch, nan_mask_edges, reduce="amax"
+            ).bool()
 
-        # Propagate back to edges
-        clean_edge_mask = ~graph_has_nan[edge_batch]  # [num_edges]
+            # Propagate back to edges
+            clean_edge_mask = ~graph_has_nan[edge_batch]  # [num_edges]
 
-        # Zero out edges belonging to graphs with NaNs
-        edge_feats = data.edge_feats.clone()
-        edge_feats[~clean_edge_mask] = 0.0
+            # Zero out edges belonging to graphs with NaNs
+            edge_feats = data.edge_feats.clone()
+            edge_feats[~clean_edge_mask] = 0.0
 
         x = self.input_non_linear_layer(x)
 
@@ -204,10 +205,10 @@ class PygModel(torch.nn.Module):
         if mask is not None:
             out = out[mask]
             target = target[mask]
-            
             # If no valid samples remain, return zero loss
             if out.size(0) == 0:
                 return torch.tensor(0.0, device=out.device, requires_grad=True)
+            
         # If just two classes, flatten outputs since BCE behavior expects equal dimensions and CE (N,k):(N)
         # Otherwise CE expects long as outputs
         if not self.multi_label:
@@ -244,8 +245,12 @@ class PygModel(torch.nn.Module):
             for batch in task.train_dataloader:
                 graph = batch["graph"].to(self.device)
                 self.optimizer.zero_grad()
-                out, mask = self(graph, return_mask=True)
-                loss = self.compute_loss(out, graph.y, mask=mask)
+                if "edge_feats" in graph:
+                    out, mask = self(graph, return_mask=True)
+                    loss = self.compute_loss(out, graph.y, mask=mask)
+                else:
+                    out = self(graph)
+                    loss = self.compute_loss(out, graph.y)
                 loss.backward()
                 self.optimizer.step()
                 epoch_loss += loss.item()
@@ -278,9 +283,13 @@ class PygModel(torch.nn.Module):
             for batch in loader:
                 graph = batch["graph"]
                 graph = graph.to(self.device)
-                out, mask = self(graph, return_mask=True)
                 labels = graph.y
-                loss = self.compute_loss(out, labels, mask=mask)
+                if "edge_feats" in graph:
+                    out, mask = self(graph, return_mask=True)
+                    loss = self.compute_loss(out, labels, mask=mask)
+                else:
+                    out = self(graph)
+                    loss = self.compute_loss(out, labels)
                 total_loss += loss.item()
 
                 # For binary/multilabel, threshold the logits at 0 (equivalent to prob > 0.5 after sigmoid)
