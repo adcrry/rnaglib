@@ -27,11 +27,11 @@ def US_align_wrapper(
 
     with tempfile.TemporaryDirectory() as tmpdir:
         if reslist_1 is not None:
-            new_cif_1 = Path(tmpdir) / "rna_1." + str(file_type)
+            new_cif_1 = Path(tmpdir) / f"rna_1.{file_type}"
             cif_remove_residues(cif_path_1, reslist_1, new_cif_1, file_type)
             cif_path_1 = new_cif_1
         if reslist_2 is not None:
-            new_cif_2 = Path(tmpdir) / "rna_2." + str(file_type)
+            new_cif_2 = Path(tmpdir) / f"rna_2.{file_type}"
             cif_remove_residues(cif_path_2, reslist_2, new_cif_2, file_type)
             cif_path_2 = new_cif_2
 
@@ -42,7 +42,7 @@ def US_align_wrapper(
             cif_path_2,
         ]
 
-    result = subprocess.run(command, capture_output=True, text=True, check=False)
+        result = subprocess.run(command, capture_output=True, text=True, check=False)
     # print(result.stdout)
     # uncomment above for debugging
     # Regular expression to find all TM-scores
