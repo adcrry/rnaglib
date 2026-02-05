@@ -40,7 +40,8 @@ class GVPGraphRepresentation(Representation):
         edge_vector_features: List[str] = ["unit_vector"],
         num_rbf: int = 32,
         num_posenc: int = 32,
-        center_atom: str = "P",
+        pyrimidine_representative: str = "P",
+        purine_representative: str = "P",
         pyrimidine_bead_atoms: List[str] = ["P","C4'","N1"],
         purine_bead_atoms: List[str] = ["P","C4'","N9"],
         distance_eps: float = DISTANCE_EPS,
@@ -54,7 +55,8 @@ class GVPGraphRepresentation(Representation):
         self.edge_vector_features = edge_vector_features
         self.num_rbf = num_rbf
         self.num_posenc = num_posenc
-        self.center_atom = center_atom
+        self.purine_representative = purine_representative
+        self.pyrimidine_representative = pyrimidine_representative
         self.clean_edges = clean_edges
         self.pyrimidine_bead_atoms = pyrimidine_bead_atoms
         self.purine_bead_atoms = purine_bead_atoms
@@ -93,7 +95,7 @@ class GVPGraphRepresentation(Representation):
 
         for graph, features_dict in zip(graph_list, features_dict_list):
             # Get ordered RNA sequences
-            chain_seqs = get_sequences(graph, gap_tolerance=1, longest_only=False, min_size_return=1)
+            chain_seqs = get_sequences(graph, gap_tolerance=1, longest_only=False, min_size_return=1, verbose=False)
             global_index = 0
             node_map = {}
             # Indices at which the forward vector can't be computed (before discontinuities or at chain ends)
@@ -136,7 +138,7 @@ class GVPGraphRepresentation(Representation):
                 y = features_dict["rna_targets"].clone().detach()
 
             # Get backbone coordinates
-            nucleotide_coords, mask_coords = get_backbone_coords(graph, node_map, [self.center_atom], [self.center_atom])
+            nucleotide_coords, mask_coords = get_backbone_coords(graph, node_map, [self.pyrimidine_representative], [self.purine_representative])
             nucleotide_coords = nucleotide_coords[:, 0, :]
             nucleotide_coords_list.append(nucleotide_coords)
             compute_frame_coords = False
@@ -189,11 +191,14 @@ class GVPGraphRepresentation(Representation):
 
             if self.graph_construction == "knn":
                 # K-nearest neighbour graph using centroids of each neucleotide
-                edge_index = knn_graph(nucleotide_coords, self.top_k)
+                edge_index = knn_graph(nucleotide_coords[mask_coords], self.top_k)
                 edge_index = to_undirected(edge_index)
             elif self.graph_construction == "base_pair":
                 # Base-pairing graph
-                edge_index = [[node_map[u], node_map[v]] for u, v in sorted(graph.edges())]
+                new_indices = torch.cumsum(mask_coords.long(), dim=0) - 1
+                new_node_map = {res: new_indices[node_map[res]] for res in node_map if mask_coords[node_map[res]]}
+                edge_index = [[new_node_map[u], new_node_map[v]] for u, v in sorted(graph.edges()) if u in new_node_map and v in new_node_map]
+                #edge_index = [[node_map[u], node_map[v]] for u, v in sorted(graph.edges())]
                 edge_index = torch.tensor(edge_index, dtype=torch.long).T
             edge_index_list.append(edge_index)
         
