@@ -1,11 +1,16 @@
+import os
+import pickle
+
 import torch
 import networkx as nx
 from torch_geometric.utils import to_undirected, coalesce
 from torch_geometric.nn.pool import knn_graph
 from typing import List
+import numpy as np
 
 from rnaglib.config.feature_encoders import NODE_FEATURE_MAP, EDGE_FEATURE_MAP
 from rnaglib.algorithms import fix_buggy_edges, internal_coords, internal_vecs, rbf_expansion, positional_encoding, normed_vec, get_backbone_coords, forward_reverse_vecs, get_sequences
+from rnaglib.utils import rbf_expand
 
 from .representation import Representation
 
@@ -45,6 +50,10 @@ class GVPGraphRepresentation(Representation):
         pyrimidine_bead_atoms: List[str] = ["P","C4'","N1"],
         purine_bead_atoms: List[str] = ["P","C4'","N9"],
         distance_eps: float = DISTANCE_EPS,
+        distograms_path = None,
+        distogram_files_prefix="distogram_",
+        distogram_files_suffix="_model_0.pkl",
+        nb_disto_bins=64,
         **kwargs,
     ):
         self.graph_construction = graph_construction
@@ -61,6 +70,10 @@ class GVPGraphRepresentation(Representation):
         self.pyrimidine_bead_atoms = pyrimidine_bead_atoms
         self.purine_bead_atoms = purine_bead_atoms
         self.distance_eps = distance_eps
+        self.distograms_path = distograms_path
+        self.distogram_files_prefix = distogram_files_prefix
+        self.distogram_files_suffix = distogram_files_suffix
+        self.nb_disto_bins = nb_disto_bins
 
         super().__init__(**kwargs)
         pass
@@ -188,6 +201,10 @@ class GVPGraphRepresentation(Representation):
                 y = y[mask_coords]
             if compute_frame_coords:
                 coords = coords[mask_coords]
+            
+            new_indices = torch.cumsum(mask_coords.long(), dim=0) - 1
+            # update node map to account for the residue cropping
+            node_map = {res: new_indices[node_map[res]] for res in node_map if mask_coords[node_map[res]]}
 
             if self.graph_construction == "knn":
                 # K-nearest neighbour graph using centroids of each neucleotide
@@ -195,10 +212,7 @@ class GVPGraphRepresentation(Representation):
                 edge_index = to_undirected(edge_index)
             elif self.graph_construction == "base_pair":
                 # Base-pairing graph
-                new_indices = torch.cumsum(mask_coords.long(), dim=0) - 1
-                new_node_map = {res: new_indices[node_map[res]] for res in node_map if mask_coords[node_map[res]]}
-                edge_index = [[new_node_map[u], new_node_map[v]] for u, v in sorted(graph.edges()) if u in new_node_map and v in new_node_map]
-                #edge_index = [[node_map[u], node_map[v]] for u, v in sorted(graph.edges())]
+                edge_index = [[node_map[u], node_map[v]] for u, v in sorted(graph.edges()) if u in node_map and v in node_map]
                 edge_index = torch.tensor(edge_index, dtype=torch.long).T
             edge_index_list.append(edge_index)
         
@@ -244,17 +258,39 @@ class GVPGraphRepresentation(Representation):
                         edge_feature_tensor = torch.stack(feature_list)
                         conf_edge_s_list.append(edge_feature_tensor)
 
+            edge_vector = nucleotide_coords[edge_index[0]] - nucleotide_coords[edge_index[1]]
+            edge_lengths = torch.sqrt((edge_vector ** 2).sum(dim=-1) + self.distance_eps)
             if "lengths" in self.edge_scalar_features:
-                edge_vector = nucleotide_coords[edge_index[0]] - nucleotide_coords[edge_index[1]]
-                edge_lengths = torch.sqrt((edge_vector ** 2).sum(dim=-1) + self.distance_eps)
                 log_edge_lengths = torch.log(edge_lengths).unsqueeze(-1)
                 conf_edge_s_list.append(log_edge_lengths)
             if "RBF" in self.edge_scalar_features:
-                edge_vector = nucleotide_coords[edge_index[0]] - nucleotide_coords[edge_index[1]]
-                edge_lengths = torch.sqrt((edge_vector ** 2).sum(dim=-1) + self.distance_eps)
                 # Edge RBF features
                 edge_rbf = rbf_expansion(edge_lengths, num_rbf=self.num_rbf)
                 conf_edge_s_list.append(edge_rbf)
+            if "disto_like_RBF" in self.edge_scalar_features:
+                edge_rbf = rbf_expand(edge_lengths, num_bins=self.num_rbf)
+                conf_edge_s_list.append(edge_rbf)
+            if "disto_features" in self.edge_scalar_features:
+                with open(os.path.join(self.distograms_path,f"{self.distogram_files_prefix}{graph.name}{self.distogram_files_suffix}"),"rb") as f:
+                    distogram_dict = pickle.load(f)
+                    distogram = distogram_dict["distogram"]["softmax"]
+                nb_bins = distogram.shape[2]
+                chain_dict = get_sequences(graph, verbose=False)
+                sorted_distogram_residues = [item for chain in sorted(chain_dict.keys()) for item in chain_dict[chain][1]]
+                distogram_map = {n: i for i, n in enumerate(sorted_distogram_residues)}
+                edge_distograms = []
+                for idx, (i, j) in edge_index.t():
+                    try:
+                        sorted_graph_residues = node_map.keys()
+                        distance = distogram[distogram_map[sorted_graph_residues[i]],distogram_map[sorted_graph_residues[j]]]
+                    except:
+                        # if distogram is not available for this edge, replace it with the Gaussian RBF of its distance
+                        edge_rbf = rbf_expand(edge_lengths[idx], num_bins=self.nb_disto_bins)
+                        distance = edge_rbf.detach().cpu().numpy().flatten()
+                    edge_distograms.append(distance)
+
+                disto_features = torch.tensor(edge_distograms)
+                conf_edge_s_list.append(disto_features)
             if "posenc" in self.edge_scalar_features:
                 # Edge positional encodings: num_edges x num_conf x num_posenc
                 edge_posenc = positional_encoding(
