@@ -70,7 +70,7 @@ class DistographRepresentation(GraphRepresentation):
                 distogram = distogram_dict["distogram"]["softmax"]
             
             nb_bins = distogram.shape[2]
-            chain_dict = get_sequences(base_graph)
+            chain_dict = get_sequences(base_graph, verbose=False)
             sorted_distogram_residues = [item for chain in sorted(chain_dict.keys()) for item in chain_dict[chain][1]]
 
             if self.distogram_edges:
