@@ -204,7 +204,7 @@ class GVPGraphRepresentation(Representation):
             
             new_indices = torch.cumsum(mask_coords.long(), dim=0) - 1
             # update node map to account for the residue cropping
-            node_map = {res: new_indices[node_map[res]] for res in node_map if mask_coords[node_map[res]]}
+            new_node_map = {res: new_indices[node_map[res]] for res in node_map if mask_coords[node_map[res]]}
 
             if self.graph_construction == "knn":
                 # K-nearest neighbour graph using centroids of each neucleotide
@@ -212,7 +212,7 @@ class GVPGraphRepresentation(Representation):
                 edge_index = to_undirected(edge_index)
             elif self.graph_construction == "base_pair":
                 # Base-pairing graph
-                edge_index = [[node_map[u], node_map[v]] for u, v in sorted(graph.edges()) if u in node_map and v in node_map]
+                edge_index = [[new_node_map[u], new_node_map[v]] for u, v in sorted(graph.edges()) if u in new_node_map and v in new_node_map]
                 edge_index = torch.tensor(edge_index, dtype=torch.long).T
             edge_index_list.append(edge_index)
         
@@ -278,16 +278,18 @@ class GVPGraphRepresentation(Representation):
                 chain_dict = get_sequences(graph, verbose=False)
                 sorted_distogram_residues = [item for chain in sorted(chain_dict.keys()) for item in chain_dict[chain][1]]
                 distogram_map = {n: i for i, n in enumerate(sorted_distogram_residues)}
-                edge_distograms = []
-                for idx, (i, j) in edge_index.t():
-                    try:
-                        sorted_graph_residues = node_map.keys()
-                        distance = distogram[distogram_map[sorted_graph_residues[i]],distogram_map[sorted_graph_residues[j]]]
-                    except:
+                sorted_graph_residues = list(node_map.keys())
+                edge_distograms = [None] * edge_index.size(1)
+                for idx, (i, j) in enumerate(edge_index.t()):
+                    res_i = distogram_map.get(sorted_graph_residues[i])
+                    res_j = distogram_map.get(sorted_graph_residues[j])
+                    if res_i is not None and res_j is not None:
+                        distance = distogram[res_i, res_j]
+                    else:
                         # if distogram is not available for this edge, replace it with the Gaussian RBF of its distance
-                        edge_rbf = rbf_expand(edge_lengths[idx], num_bins=self.nb_disto_bins)
+                        edge_rbf = rbf_expand(edge_lengths[idx], num_bins=nb_bins)
                         distance = edge_rbf.detach().cpu().numpy().flatten()
-                    edge_distograms.append(distance)
+                    edge_distograms[idx] = distance
 
                 disto_features = torch.tensor(edge_distograms)
                 conf_edge_s_list.append(disto_features)
