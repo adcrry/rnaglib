@@ -299,7 +299,6 @@ class PygModel(torch.nn.Module):
                 probs = tonumpy(probs)
                 preds = tonumpy(preds)
                 labels = tonumpy(labels)
-                mask_np = tonumpy(mask)
 
                 # split predictions per RNA if residue level
                 if not self.graph_level:
@@ -316,8 +315,7 @@ class PygModel(torch.nn.Module):
                         labels[start:end]
                         for start, end in zip(cumulative_sizes[:-1], cumulative_sizes[1:], strict=False)
                     ]
-                    mask_np = [mask_np[start:end] for start, end in zip(cumulative_sizes[:-1], cumulative_sizes[1:], strict=False)]
-            
+
                 all_probs.extend(probs)
                 all_preds.extend(preds)
                 all_labels.extend(labels)
