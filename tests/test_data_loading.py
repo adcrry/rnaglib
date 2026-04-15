@@ -119,5 +119,32 @@ class TestDataset(unittest.TestCase):
         except TypeError as e:
             self.fail(f"rna_from_pdbid raised TypeError: {e}")
 
+    def test_rnadataset_save_and_extension(self):
+        import tempfile
+        import os
+        from rnaglib.dataset.rna_dataset import RNADataset
+        from rnaglib.dataset.rna import RNA
+        
+        g1 = nx.Graph(name="test_1", pdbid="1abc")
+        g2 = nx.Graph(name="test_2", pdbid="2xyz")
+        rnas = [g1, g2]
+        
+        # Test in-memory extension default
+        dataset = RNADataset(rnas=rnas)
+        self.assertEqual(dataset.extension, ".json")
+        
+        with tempfile.TemporaryDirectory() as td:
+            dataset.save(td)
+            
+            # Check files were created with .json extension
+            dump_files = set(os.listdir(td))
+            self.assertIn("test_1.json", dump_files)
+            self.assertIn("test_2.json", dump_files)
+            
+            # Test that RNADataset correctly loads from the dumped dir
+            loaded_dataset = RNADataset(dataset_path=td)
+            self.assertEqual(len(loaded_dataset), 2)
+            self.assertEqual(loaded_dataset.extension, ".json")
+
 if __name__ == "__main__":
     unittest.main()

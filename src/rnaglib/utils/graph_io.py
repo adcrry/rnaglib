@@ -69,6 +69,21 @@ def dump_json(filename, graph):
         json.dump(g_json, f, indent=2)
 
 
+def dump_graph(filename, graph):
+    """Dump a graph to either dict JSON or Networkx pickled dict/object.
+
+    :param filename: The dump name
+    :param graph: The graph to dump
+    """
+    if str(filename).endswith("json"):
+        dump_json(filename, graph)
+    elif str(filename).endswith("p"):
+        with open(filename, "wb") as f:
+            pickle.dump(graph, f)
+    else:
+        raise ValueError(f"Unknown extension for dump_graph: {filename}")
+
+
 def load_json(filename):
     """Just a shortcut to load a json graph more compactly.
 

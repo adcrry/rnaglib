@@ -15,7 +15,7 @@ import numpy as np
 from rnaglib.transforms.featurize import FeaturesComputer
 from rnaglib.transforms.represent import Representation
 from rnaglib.transforms.transform import AnnotationTransform, Transform
-from rnaglib.utils import download_graphs, dump_json, load_graph
+from rnaglib.utils import download_graphs, dump_json, dump_graph, load_graph
 from rnaglib.utils.graph_io import get_all_existing, get_name_extension
 
 
@@ -86,6 +86,7 @@ class RNADataset(Dataset):
             get_pdbs: bool = True,
             multigraph: bool = False,
             transforms: list[Transform] | Transform = None,
+            extension: str = ".json"
     ):
         if transforms is None:
             self.transforms = []
@@ -95,6 +96,9 @@ class RNADataset(Dataset):
             self.transforms = [transforms]
         self.multigraph = multigraph
         self.version = version
+        
+        assert extension in {".json", ".p"}
+        self.extension = extension
 
         if dataset_path is not None:
             self.dataset_path = dataset_path
@@ -395,16 +399,17 @@ class RNADataset(Dataset):
 
         # Check if all files are already there
         existing_files = set(os.listdir(dump_path))
-        to_dump = set([x + '.json' for x in self.all_rnas.keys()])
+        to_dump = set([f"{x}{self.extension}" for x in self.all_rnas.keys()])
         if to_dump.issubset(existing_files) and not recompute:
             if verbose:
                 print('files already exist, set "recompute=True" to overwrite')
+            return
         for rna_name, i in self.all_rnas.items():
             if not self.in_memory:
-                rna_graph = load_graph(Path(self.dataset_path) / f"{rna_name}.json")
+                rna_graph = load_graph(Path(self.dataset_path) / f"{rna_name}{self.extension}")
             else:
                 rna_graph = self.rnas[i]
-            dump_json(Path(dump_path) / f"{rna_name}.json", rna_graph)
+            dump_graph(Path(dump_path) / f"{rna_name}{self.extension}", rna_graph)
 
 
 if __name__ == "__main__":
