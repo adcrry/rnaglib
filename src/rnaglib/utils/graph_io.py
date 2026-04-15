@@ -104,7 +104,7 @@ def load_graph(filename, multigraph=False):
     """
     if str(filename).endswith("json"):
         graph = load_json(filename)
-    elif filename.endswith("p"):
+    elif str(filename).endswith("p"):
         pickled = pickle.load(open(filename, "rb"))
         # Depending on the data versionning, the object contained in the pickles is
         # - a graph with noderings in the nodes
@@ -159,7 +159,7 @@ def get_all_existing(dataset_path: os.PathLike, all_rnas: list[str] | None = Non
 
     # Filter out existing ones, and print message if there is a difference
     existing_all_rnas = [g_name for g_name in all_rnas if os.path.exists(Path(dataset_path) / f"{g_name}{extension}")]
-    missing = set(existing_all_rnas) - set(all_rnas)
+    missing = set(all_rnas) - set(existing_all_rnas)
     size_diff = len(all_rnas) - len(existing_all_rnas)
     if size_diff > 0:
         print(f"{size_diff} graphs were missing from {dataset_path} compared to asked graphs")

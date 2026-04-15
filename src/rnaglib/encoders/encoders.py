@@ -59,8 +59,9 @@ class MultiLabelOneHotEncoder(OneHotEncoder):
 
     def decode(self, one_hot):
         decoded = []
-        for non_zero in torch.where(one_hot).tolist():
-            decoded.append(self.reverse_mapping[non_zero.item()])
+        for non_zero in torch.where(one_hot)[0].tolist():
+            decoded.append(self.reverse_mapping[non_zero])
+        return decoded
 
 
 class IntMappingEncoder:
