@@ -95,6 +95,29 @@ class TestDataset(unittest.TestCase):
         dataset = RNADataset(debug=True, transforms=None)
         assert dataset.transforms == []
 
+    def test_rna_class_from_dict(self):
+        """Test RNA from_dict properly sets graph properties and creates self.rna_dict."""
+        from rnaglib.dataset.rna import RNA
+        g = nx.Graph(name="test_rna", pdbid="1abc")
+        rna_dict = {"rna": g, "other_attr": "value"}
+        rna = RNA(rna_dict=rna_dict)
+        assert hasattr(rna, "name")
+        assert rna.name == "test_rna"
+        assert hasattr(rna, "pdbid")
+        assert rna.pdbid == "1abc"
+        assert getattr(rna, "other_attr") == "value"
+        assert rna.to_dict() == rna_dict
+
+    def test_rna_from_pdbid_no_multigraph_error(self):
+        """Test RNA from_pdbid runs without TypeError related to multigraph."""
+        from rnaglib.dataset.rna import RNA
+        # This should fail if it tries to pass multigraph to rna_from_pdbid which doesn't accept it
+        try:
+            rna = RNA(pdbid="1fmn")
+            assert hasattr(rna, "pdbid")
+            assert rna.pdbid == "1fmn"
+        except TypeError as e:
+            self.fail(f"rna_from_pdbid raised TypeError: {e}")
 
 if __name__ == "__main__":
     unittest.main()
