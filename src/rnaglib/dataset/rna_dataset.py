@@ -87,7 +87,12 @@ class RNADataset(Dataset):
             multigraph: bool = False,
             transforms: list[Transform] | Transform = None,
     ):
-        self.transforms = [transforms] if transforms is not None and not isinstance(transforms, Iterable) else []
+        if transforms is None:
+            self.transforms = []
+        elif isinstance(transforms, Iterable):
+            self.transforms = list(transforms)
+        else:
+            self.transforms = [transforms]
         self.multigraph = multigraph
         self.version = version
 

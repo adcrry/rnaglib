@@ -76,6 +76,25 @@ class TestDataset(unittest.TestCase):
         )
         assert dataset[0]["graph"].x is not None
 
+    def test_transforms_list_not_dropped(self):
+        """Passing a list of transforms should keep all of them (fix: transforms were silently dropped)."""
+        from rnaglib.transforms import RfamTransform
+        tr1 = RNAFMTransform(debug=True)
+        tr2 = RfamTransform()
+        dataset = RNADataset(debug=True, transforms=[tr1, tr2])
+        assert len(dataset.transforms) == 2
+
+    def test_transforms_single_kept(self):
+        """Passing a single transform should wrap it in a list."""
+        tr = RNAFMTransform(debug=True)
+        dataset = RNADataset(debug=True, transforms=tr)
+        assert len(dataset.transforms) == 1
+
+    def test_transforms_none_is_empty(self):
+        """Passing None transforms should give an empty list."""
+        dataset = RNADataset(debug=True, transforms=None)
+        assert dataset.transforms == []
+
 
 if __name__ == "__main__":
     unittest.main()
