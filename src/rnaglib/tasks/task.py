@@ -546,7 +546,7 @@ class ClassificationTask(Task):
                 average=None if self.metadata['num_classes'] == 2 else "macro",
                 multi_class="ovo",
             )
-        except:
+        except Exception:
             return one_metric
         return one_metric
 
