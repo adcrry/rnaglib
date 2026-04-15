@@ -23,3 +23,4 @@ class TestUtils(unittest.TestCase):
         res1, res2 = cdhit_wrapper(['seq1', 'seq2'], ['AA', 'CC'])
         assert isinstance(res1, dict)
         assert isinstance(res2, (dict, type(None), tuple, list))
+        
