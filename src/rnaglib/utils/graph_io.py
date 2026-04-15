@@ -284,6 +284,8 @@ def download_name_generator(version="2.0.2", redundancy="nr", annotated=False, r
     """
     # Find remote url and get download link
     # full = https://zenodo.org/records/7624873/files/rnaglib-all-1.0.0.tar.gz?download=1
+    if debug:
+        redundancy = "debug"
     if annotated:
         if version == "1.0.0":
             print("Annotated version for v 1.0.0 not available. Try a higher version")
@@ -535,6 +537,11 @@ def get_Ribochains():
 
     :return: dictionary, keys=pbid, value='all'
     """
+    try:
+        from rcsbsearchapi.search import AttributeQuery as Attr, TextQuery
+    except ImportError:
+        raise ImportError("Fetching from RCSB requires 'rcsbsearchapi'. Run `pip install rcsbsearchapi`.")
+
     q1 = Attr("rcsb_entry_info.polymer_entity_count_RNA") >= 1
     q2 = TextQuery("ribosome")
 
@@ -549,11 +556,15 @@ def get_Ribochains():
 
 
 def get_NonRibochains():
-    """Get a list of all PDB structures containing RNA
-    and do not have the text 'ribosome'
+    """Get a list of all PDB structures containing RNA and do not have the text 'ribosome'
 
     :return: dictionary, keys=pbid, value='all'
     """
+    try:
+        from rcsbsearchapi.search import AttributeQuery as Attr, TextQuery
+    except ImportError:
+        raise ImportError("Fetching from RCSB requires 'rcsbsearchapi'. Run `pip install rcsbsearchapi`.")
+
     q1 = Attr("rcsb_entry_info.polymer_entity_count_RNA") >= 1
     q2 = TextQuery("ribosome")
 
@@ -566,6 +577,11 @@ def get_Custom(text):
 
     :return: dictionary, keys=pbid, value='all'
     """
+    try:
+        from rcsbsearchapi.search import AttributeQuery as Attr, TextQuery
+    except ImportError:
+        raise ImportError("Fetching from RCSB requires 'rcsbsearchapi'. Run `pip install rcsbsearchapi`.")
+
     q1 = Attr("rcsb_entry_info.polymer_entity_count_RNA") >= 1
     q2 = TextQuery(text)
 
@@ -580,4 +596,4 @@ if __name__ == "__main__":
     # print(g.nodes())
     default = get_default_download_dir()
     print(default)
-    graph_from_pdbid("4nlf")
+    # graph_from_pdbid("4nlf")

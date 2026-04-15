@@ -233,8 +233,6 @@ class Task:
         self.set_datasets(recompute=recompute)
 
         # If no collater is provided we need one
-        if not dataloader_kwargs:
-            dataloader_kwargs = {}
         if "collate_fn" not in dataloader_kwargs:
             collater = Collater(self.train_dataset)
             dataloader_kwargs["collate_fn"] = collater
