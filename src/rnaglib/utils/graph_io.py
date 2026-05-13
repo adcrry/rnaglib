@@ -355,6 +355,10 @@ def download_graphs(
             update_RNApdb(pdb_path, rna_list=rna_list, nr_only=redundancy == "nr")
 
     else:
+        if get_pdbs:
+            print("Fetching missing PDB structures")
+            rna_list = [Path(p).stem for p in os.listdir(data_path / tag / "graphs")]
+            update_RNApdb(pdb_path, rna_list=rna_list, nr_only=redundancy == "nr")
         print("Database was found and not overwritten")
 
     if get_pdbs:
@@ -515,7 +519,10 @@ def update_RNApdb(pdir, nr_only=True, rna_list=None, debug=False):
     pl = PDBList()
 
     # If not fully downloaded before, download all structures
+    # download non obsolete structures
     pl.download_pdb_files(rna, pdir=pdir, overwrite=False)
+    # download obsolete structures
+    pl.download_pdb_files(rna, pdir=pdir, overwrite=False, obsolete=True)
     added, mod, obsolete = pl.get_recent_changes()
     # Download new and modded entries
     new_rna = rna.intersection(set(added).union(set(mod)))
@@ -523,8 +530,6 @@ def update_RNApdb(pdir, nr_only=True, rna_list=None, debug=False):
 
     # Remove Obsolete entries
     obsolete_dir = os.path.join(pdir, "obsolete")
-    if not os.path.exists(obsolete_dir):
-        os.mkdir(obsolete_dir)
     for cif in os.listdir(pdir):
         if cif[-8:-4].upper() in set(obsolete):
             os.rename(os.path.join(pdir, cif), os.path.join(obsolete_dir, cif))
