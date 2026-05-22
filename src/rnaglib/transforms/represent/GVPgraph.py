@@ -179,6 +179,16 @@ class GVPGraphRepresentation(Representation):
             edge_index = [[node_map[u], node_map[v]] for u, v in sorted(graph.edges())]
             edge_index = torch.tensor(edge_index, dtype=torch.long).T
 
+
+        # Remove edges where either node has been masked out
+        mask_edge = mask_coords[edge_index[0]] & mask_coords[edge_index[1]]
+        edge_index = edge_index[:, mask_edge]
+
+        mapping = torch.zeros(mask_coords.size(0), dtype=torch.long)
+        mapping[mask_coords] = torch.arange(mask_coords.sum())
+            
+        edge_index = mapping[edge_index]
+
         # Encode edge vector features
         edge_v_list = []
         if "unit_vector" in self.edge_vector_features:
@@ -213,6 +223,7 @@ class GVPGraphRepresentation(Representation):
             )
             edge_s_list.append(edge_posenc)
         edge_s = torch.cat(edge_s_list, dim=-1)
+        edge_s = edge_s.unsqueeze(-1)
 
         node_s, node_v, edge_s, edge_v = map(
             torch.nan_to_num,
