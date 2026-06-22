@@ -343,7 +343,7 @@ def get_backbone_coords(graph, node_map, pyrimidine_bb_indices, purine_bb_indice
                 atom = purine_atom
             else:
                 atom = pyrimidine_atom
-            coords = graph.nodes()[n][f'xyz_{atom}']
+            coords = graph.nodes()[n].get(f'xyz_{atom}', None)
             if coords is not None:
                 atom_coords_list.append(torch.as_tensor(coords))
                 atom_mask_coords.append(torch.tensor(0))
