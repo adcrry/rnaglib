@@ -14,7 +14,7 @@ import tqdm
 import numpy as np
 import pandas as pd
 from sklearn.metrics import accuracy_score, f1_score, matthews_corrcoef
-from sklearn.metrics import roc_auc_score, jaccard_score, balanced_accuracy_score
+from sklearn.metrics import roc_auc_score, jaccard_score, balanced_accuracy_score, auc, precision_recall_curve
 import torch
 from torch.utils.data import DataLoader
 
@@ -669,6 +669,9 @@ class ClassificationTask(Task):
                 average=None if self.metadata['num_classes'] == 2 else "macro",
                 multi_class="ovo",
             )
+            if self.metadata['num_classes'] == 2:
+                precision, recall, _ = precision_recall_curve(labels, probs)
+                one_metric['auprc'] = auc(recall, precision)
         except Exception as e:
             print(e)
             return one_metric
